@@ -1,1 +1,0 @@
-# Facial-App-Recognition-on-AWS
