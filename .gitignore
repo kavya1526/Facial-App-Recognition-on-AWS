@@ -21,3 +21,20 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# python
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+
+# sam
+backend/.aws-sam/
+samconfig.toml
+
+# local env
+.env.local
+
+# personal notes, not part of the project
+/docs/

@@ -1,0 +1,8 @@
+# Intentionally empty.
+#
+# The handlers import only boto3 and the standard library, and the Lambda
+# python3.12 runtime already provides boto3. Pinning it here would ship a
+# second copy in the deployment package for no benefit.
+#
+# The file itself is required: `sam build` fails for a Python function whose
+# CodeUri has no requirements.txt.

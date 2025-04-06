@@ -1,0 +1,308 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  Facial recognition access control. Employee photos land in a private bucket
+  and are indexed into a Rekognition collection asynchronously; visitor photos
+  are uploaded through a short-lived presigned POST and matched synchronously.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: facial-recog
+    Description: Prefix for every resource name in the stack.
+
+  AllowedOrigin:
+    Type: String
+    Description: >
+      Exact origin of the deployed frontend, e.g.
+      https://kavyaparikh.github.io. Used for both API Gateway CORS and the
+      visitor bucket's CORS policy. Not "*": the browser sends the upload
+      directly to S3, so a wildcard would let any page drive that endpoint.
+
+  SimilarityThreshold:
+    Type: Number
+    Default: 90
+    MinValue: 70
+    MaxValue: 100
+    Description: >
+      Minimum Rekognition similarity score to accept a match. Raising it
+      trades false accepts for false rejects; see README.
+
+  VisitorRetentionDays:
+    Type: Number
+    Default: 1
+    Description: >
+      How long visitor photos live before S3 deletes them. These are images of
+      people's faces captured at a door, so the default keeps them only long
+      enough to debug a failed match.
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [arm64]        # ~20% cheaper per GB-second than x86_64
+    MemorySize: 512
+    Timeout: 15
+    Tracing: Active               # X-Ray, to attribute latency to Rekognition
+    Environment:
+      Variables:
+        VISITOR_BUCKET: !Sub "${ProjectName}-visitors-${AWS::AccountId}"
+        EMPLOYEE_BUCKET: !Sub "${ProjectName}-employees-${AWS::AccountId}"
+        REKOGNITION_COLLECTION_ID: !Sub "${ProjectName}-employees"
+        EMPLOYEE_TABLE: !Ref EmployeeTable
+        SIMILARITY_THRESHOLD: !Ref SimilarityThreshold
+        ALLOWED_ORIGIN: !Ref AllowedOrigin
+        LOG_LEVEL: INFO
+        # Drops the boto3 import cost on cold start for functions that only
+        # talk to one service.
+        AWS_XRAY_CONTEXT_MISSING: LOG_ERROR
+
+Resources:
+  # ---------------------------------------------------------------------------
+  # Storage
+  #
+  # Bucket names are built from ${ProjectName}-${AWS::AccountId} rather than
+  # left to CloudFormation. The employee bucket must name the Lambda that
+  # consumes its events, and the Lambda's environment must name the bucket --
+  # referencing both ways would be a circular dependency, so the name is
+  # derived independently on each side.
+  # ---------------------------------------------------------------------------
+  VisitorBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ProjectName}-visitors-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-visitor-images
+            Status: Enabled
+            Prefix: visitors/
+            ExpirationInDays: !Ref VisitorRetentionDays
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins: [!Ref AllowedOrigin]
+            AllowedMethods: [POST]
+            AllowedHeaders: ["*"]
+            MaxAge: 3000
+
+  EmployeeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ProjectName}-employees-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  EmployeeTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}-employees"
+      # On-demand: authentication traffic is bursty and tied to shift changes,
+      # and the table is small enough that provisioned capacity would cost
+      # more in idle hours than it saves at peak.
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: FaceId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: FaceId
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  FaceCollection:
+    Type: AWS::Rekognition::Collection
+    Properties:
+      CollectionId: !Sub "${ProjectName}-employees"
+
+  # ---------------------------------------------------------------------------
+  # Async indexing
+  # ---------------------------------------------------------------------------
+  IndexFaceDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${ProjectName}-index-dlq"
+      MessageRetentionPeriod: 1209600   # 14 days, the maximum
+
+  IndexFaceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-index-face"
+      CodeUri: src/
+      Handler: handlers.index_face.handler
+      # Async invocations retry twice on an unhandled exception; anything
+      # still failing lands in the DLQ instead of vanishing.
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt IndexFaceDLQ.Arn
+      EventInvokeConfig:
+        MaximumRetryAttempts: 2
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: rekognition:IndexFaces
+              # Scoped to this collection: the role cannot touch a collection
+              # belonging to another stack in the same account.
+              Resource: !Sub "arn:aws:rekognition:${AWS::Region}:${AWS::AccountId}:collection/${ProjectName}-employees"
+            - Effect: Allow
+              # Rekognition reads the S3 object using the caller's credentials,
+              # so this role -- not a Rekognition service principal -- needs
+              # read access to the employee bucket.
+              Action: s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${ProjectName}-employees-${AWS::AccountId}/employees/*"
+            - Effect: Allow
+              Action: dynamodb:PutItem
+              Resource: !GetAtt EmployeeTable.Arn
+            - Effect: Allow
+              Action: sqs:SendMessage
+              Resource: !GetAtt IndexFaceDLQ.Arn
+      Events:
+        EmployeePhotoUploaded:
+          Type: S3
+          Properties:
+            Bucket: !Ref EmployeeBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: employees/
+                  - Name: suffix
+                    Value: .jpg
+
+  # ---------------------------------------------------------------------------
+  # Synchronous API
+  # ---------------------------------------------------------------------------
+  Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: dev
+      TracingEnabled: true
+      Cors:
+        AllowOrigin: !Sub "'${AllowedOrigin}'"
+        AllowHeaders: "'Content-Type'"
+        AllowMethods: "'GET,POST,OPTIONS'"
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          # A face-recognition call costs real money per invocation, so the
+          # public endpoint is throttled well below account limits to bound
+          # the damage from a scripted flood.
+          ThrottlingRateLimit: 20
+          ThrottlingBurstLimit: 40
+          MetricsEnabled: true
+
+  PresignUploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-presign-upload"
+      CodeUri: src/
+      Handler: handlers.presign_upload.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: s3:PutObject
+              # The presigned policy can only ever grant what this role holds,
+              # so restricting it to the visitors/ prefix bounds every URL the
+              # function can mint.
+              Resource: !Sub "arn:aws:s3:::${ProjectName}-visitors-${AWS::AccountId}/visitors/*"
+      Events:
+        Presign:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /uploads
+            Method: POST
+
+  AuthenticateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-authenticate"
+      CodeUri: src/
+      Handler: handlers.authenticate.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: rekognition:SearchFacesByImage
+              Resource: !Sub "arn:aws:rekognition:${AWS::Region}:${AWS::AccountId}:collection/${ProjectName}-employees"
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${ProjectName}-visitors-${AWS::AccountId}/visitors/*"
+            - Effect: Allow
+              Action: dynamodb:GetItem
+              Resource: !GetAtt EmployeeTable.Arn
+      Events:
+        Authenticate:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /employee
+            Method: GET
+
+  # ---------------------------------------------------------------------------
+  # Operations
+  # ---------------------------------------------------------------------------
+  IndexDLQAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-index-dlq-not-empty"
+      AlarmDescription: >
+        A face failed to index after all retries. Each message is an employee
+        who will be denied entry, so this is the one alarm worth waking up for.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt IndexFaceDLQ.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  AuthErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-authenticate-errors"
+      AlarmDescription: Authenticate function is throwing 5xx.
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AuthenticateFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+Outputs:
+  ApiBaseUrl:
+    Description: Set this as REACT_APP_API_BASE_URL in the frontend build.
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/dev"
+
+  EmployeeBucketName:
+    Description: Upload employee headshots here as employees/first_last.jpg
+    Value: !Ref EmployeeBucket
+
+  VisitorBucketName:
+    Value: !Ref VisitorBucket
+
+  IndexFaceDLQUrl:
+    Value: !Ref IndexFaceDLQ

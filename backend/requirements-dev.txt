@@ -1,0 +1,7 @@
+# Runtime deps are empty on purpose: the handlers use only boto3 and the
+# standard library, and Lambda's python3.12 runtime ships boto3 already. That
+# keeps the deployment package at a few kilobytes and cold starts short.
+boto3==1.35.36
+moto[s3,dynamodb]==5.0.18
+pytest==8.3.3
+pytest-cov==5.0.0
