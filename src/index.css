@@ -1,13 +1,18 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+@import "tailwindcss";
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* Tailwind v4 normally discovers source files itself, but that detection is
+   driven by the PostCSS input path, which CRACO does not hand through -- the
+   result is a stylesheet with base styles and zero utilities. Declaring the
+   source explicitly removes the dependency on that inference. */
+@source "./";
+
+/* Tailwind v4 is configured in CSS rather than a tailwind.config.js. Design
+   tokens declared here become utilities automatically, so `bg-brand` and
+   `text-brand` work without touching a JS config file. */
+@theme {
+  --color-brand: #1f2937;
+  --color-success: #065f46;
+  --color-success-surface: #ecfdf5;
+  --color-danger: #991b1b;
+  --color-danger-surface: #fef2f2;
 }
