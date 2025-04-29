@@ -5,17 +5,22 @@ import HistoryPage from './pages/HistoryPage';
 
 export default function App() {
   return (
-    <main className="mx-auto max-w-lg px-4 py-10">
-      <h1 className="mb-6 text-center text-2xl font-semibold text-gray-900">
-        Facial Recognition Check-In
-      </h1>
+    <div className="min-h-screen bg-gray-50">
+      <main className="mx-auto max-w-lg px-4 py-10">
+        <h1 className="text-center text-2xl font-semibold tracking-tight text-gray-900">
+          Facial Recognition Check-In
+        </h1>
+        <p className="mt-1 mb-6 text-center text-sm text-gray-500">
+          Serverless employee verification on AWS Rekognition
+        </p>
 
-      <Header />
+        <Header />
 
-      <Routes>
-        <Route path="/" element={<CheckInPage />} />
-        <Route path="/history" element={<HistoryPage />} />
-      </Routes>
-    </main>
+        <Routes>
+          <Route path="/" element={<CheckInPage />} />
+          <Route path="/history" element={<HistoryPage />} />
+        </Routes>
+      </main>
+    </div>
   );
 }
