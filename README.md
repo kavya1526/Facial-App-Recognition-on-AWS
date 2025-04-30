@@ -2,8 +2,11 @@
 
 Serverless employee check-in on AWS. An employee photo dropped into a private
 S3 bucket is indexed into a Rekognition collection asynchronously; a visitor at
-the door uploads a photo through a short-lived presigned policy and gets a
-match decision in one synchronous call.
+the door presents a photo — uploaded or taken with the device camera — through
+a short-lived presigned policy, and gets a match decision in one synchronous
+call.
+
+**Live:** https://kavya1526.github.io/Facial-Recognition-App-on-AWS
 
 ```
                     ┌──────────────── enrolment (async) ────────────────┐
@@ -116,6 +119,16 @@ already applies `FaceMatchThreshold`. That keeps the rule testable without
 calling AWS, and means the behaviour is visible in the repository rather than
 buried in a service parameter.
 
+The frontend draws the threshold as a notch on the similarity meter, so a 91%
+pass and a 99% pass do not look like the same result. That number reaches the
+browser through `REACT_APP_SIMILARITY_THRESHOLD` rather than from the API,
+because the API deliberately answers "yes or no, and a score" rather than
+publishing its own configuration. The cost of that choice is a value stored in
+two places: deploying the stack with a different `SimilarityThreshold` and not
+updating the env var leaves the marker drawn in the wrong place. The verdict
+itself is unaffected — the accept/reject decision is made server-side either
+way, and only the drawn marker would be wrong.
+
 ### Idempotency
 
 S3 event notifications are at-least-once, so the same object can be delivered
@@ -169,8 +182,12 @@ These are deliberate omissions, not oversights:
   upload policy. Real access control needs Cognito or an API key in front of
   API Gateway; throttling (20 rps, 40 burst) currently bounds the damage rather
   than preventing it.
-- **No liveness detection.** A photo of a photo authenticates. Defeating that
-  needs Rekognition Face Liveness, which requires a video stream.
+- **No liveness detection.** A photo of a photo authenticates, and the camera
+  makes that easier rather than harder: holding a phone up to the lens is the
+  whole attack. Nothing about capturing in-browser implies the face was
+  present — the frame is a JPEG by the time the API sees it, identical to an
+  uploaded one. Defeating this needs Rekognition Face Liveness, which requires
+  a video stream and a session the server controls.
 - **`employees/` is populated out of band**, by console or CLI upload. There is
   no enrolment UI or admin authorisation.
 - **Employee names come from the filename** (`employees/first_last.jpg`), which
@@ -190,10 +207,56 @@ backend/
   tests/                   pytest; moto for S3/DynamoDB, botocore Stubber for Rekognition
 src/
   api.js                   all network calls; the components never fetch
+  index.css                Tailwind entry and the whole design token set
   store/                   Redux Toolkit slice for the session check-in log
-  components/, pages/      header and the two routes
+  components/
+    Header.jsx             nav plus live granted/denied counts
+    CameraCapture.jsx      getUserMedia preview and canvas shutter
+    Verdict.jsx            the granted/denied result and similarity meter
+  pages/                   the two routes
 craco.config.js            PostCSS override so Tailwind runs under CRA
 ```
+
+### Capturing from the camera
+
+A door terminal that can only accept a file picker is the wrong shape for the
+problem, so the photo source is a choice between an upload and the device
+camera. The captured frame is drawn to a canvas and encoded with `toBlob` into
+a JPEG `File`, which means it enters the upload path indistinguishable from a
+picked file — [src/api.js](src/api.js) and the backend never learn which one
+they are handling. That is also why the presigned policy pins `image/jpeg`:
+every browser can produce JPEG from a canvas, so one content type covers both
+sources.
+
+Frames are capped at 1280px on the long edge at quality 0.92, which lands a few
+hundred KB. Rekognition gains nothing from more pixels — it wants a face that
+is reasonably large in frame, not a large frame — and staying well inside the
+5 MB signed policy means the size check cannot fail on that path.
+
+Three things a camera needs that are easy to leave out:
+
+- The stream is stopped on unmount, **including when the component unmounts
+  while the permission prompt is still open**. Miss that and the stream is
+  orphaned and the camera light stays on with nothing rendering it.
+- The tab switch is keyed, so moving to Upload actually unmounts the component
+  and releases the device rather than hiding a live preview.
+- `getUserMedia`'s rejections are translated. `NotReadableError` means "another
+  application has the camera" and `NotAllowedError` means "you denied the
+  prompt"; shown raw, neither tells the person what to do next.
+
+### Design tokens
+
+The tokens in [src/index.css](src/index.css) are named for the role they play —
+`surface`, `sunken`, `border`, `ink`, `muted`, `subtle` — rather than for their
+value. That is what lets the dark theme be a list of value swaps at the bottom
+of the same file instead of a second set of components, and it stops each
+component inventing its own idea of what "muted text" means.
+
+Colour is never the only carrier of the verdict: granted and denied differ by
+icon, label, and position as well as hue. Focus is a single `:focus-visible`
+rule in the base layer rather than per-component utilities, which drift apart
+as soon as someone adds a control and forgets one. Both animations are dropped
+under `prefers-reduced-motion`.
 
 ### Session check-in log
 
@@ -269,6 +332,16 @@ cp .env.example .env.local          # set REACT_APP_API_BASE_URL from stack outp
 npm install
 npm run deploy                      # builds and pushes to the gh-pages branch
 ```
+
+`npm run deploy` only pushes the branch. The first time, GitHub Pages also has
+to be pointed at it: **Settings → Pages → Deploy from a branch → `gh-pages`,
+`/ (root)`**. Until that is set the branch exists and the site still 404s,
+which looks like a failed deploy but is not one.
+
+The API base URL is inlined into the bundle at build time, so changing it means
+rebuilding, not just redeploying. Camera capture needs a secure context —
+`getUserMedia` is unavailable over plain http, so it works on GitHub Pages and
+on `localhost` but not on a bare-IP dev server.
 
 ### Tear down
 
