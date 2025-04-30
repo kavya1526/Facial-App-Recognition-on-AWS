@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Face-detection reticle: four corner brackets around a head-and-shoulders
+       glyph. Reads at 16px because the brackets stay in the corners and the
+       silhouette is a solid mass rather than an outline. -->
+  <rect width="32" height="32" rx="7" fill="#14192a"/>
+  <g fill="none" stroke="#7d93f5" stroke-width="2" stroke-linecap="round">
+    <path d="M8 11V9.5A1.5 1.5 0 0 1 9.5 8H11"/>
+    <path d="M21 8h1.5A1.5 1.5 0 0 1 24 9.5V11"/>
+    <path d="M24 21v1.5a1.5 1.5 0 0 1-1.5 1.5H21"/>
+    <path d="M11 24H9.5A1.5 1.5 0 0 1 8 22.5V21"/>
+  </g>
+  <circle cx="16" cy="14.6" r="3.1" fill="#eef1f6"/>
+  <path d="M10.9 22.4a5.3 5.3 0 0 1 10.2 0Z" fill="#eef1f6"/>
+</svg>

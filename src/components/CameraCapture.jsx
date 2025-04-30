@@ -44,6 +44,7 @@ export default function CameraCapture({ onCapture, disabled }) {
   const streamRef = useRef(null);
   const [error, setError] = useState(null);
   const [ready, setReady] = useState(false);
+  const [flash, setFlash] = useState(false);
 
   const stop = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -102,6 +103,10 @@ export default function CameraCapture({ onCapture, disabled }) {
     ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+    // Fires before toBlob finishes encoding, so the flash acknowledges the
+    // press immediately rather than after the compression pause.
+    setFlash(true);
+
     canvas.toBlob(
       (blob) => {
         if (!blob) {
@@ -122,15 +127,25 @@ export default function CameraCapture({ onCapture, disabled }) {
 
   if (error) {
     return (
-      <p className="rounded-lg bg-danger-surface p-4 text-sm text-danger">
-        {error}
-      </p>
+      <div className="flex aspect-[4/3] flex-col items-center justify-center gap-2 rounded-xl border border-danger-border bg-danger-surface p-6 text-center">
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="size-7 text-danger">
+          <path
+            d="M12 9v4m0 3h.01M10.3 4.3 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <p className="text-sm text-danger">{error}</p>
+      </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      <div className="relative overflow-hidden rounded-lg bg-gray-900">
+      <div className="relative overflow-hidden rounded-xl bg-[#0b0e16]">
         <video
           ref={videoRef}
           autoPlay
@@ -139,10 +154,31 @@ export default function CameraCapture({ onCapture, disabled }) {
           onLoadedMetadata={() => setReady(true)}
           className="aspect-[4/3] w-full -scale-x-100 object-cover"
         />
+
+        {/* A loose framing guide. Rekognition does not need the face centred,
+            but people aim at a target if you give them one, and a centred,
+            reasonably large face is what produces a usable match. */}
+        {ready && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 flex items-center justify-center"
+          >
+            <div className="h-[68%] w-[52%] rounded-[50%] border-2 border-white/25" />
+          </div>
+        )}
+
         {!ready && (
-          <p className="absolute inset-0 flex items-center justify-center text-sm text-gray-400">
+          <p className="absolute inset-0 flex items-center justify-center text-sm text-white/50">
             Starting camera…
           </p>
+        )}
+
+        {flash && (
+          <div
+            aria-hidden="true"
+            onAnimationEnd={() => setFlash(false)}
+            className="animate-shutter absolute inset-0 bg-white"
+          />
         )}
       </div>
 
@@ -150,9 +186,10 @@ export default function CameraCapture({ onCapture, disabled }) {
         type="button"
         onClick={capture}
         disabled={!ready || disabled}
-        className="w-full rounded-lg bg-brand px-5 py-2.5 text-sm font-medium
-                   text-white transition hover:bg-brand/90
-                   disabled:cursor-not-allowed disabled:bg-gray-300"
+        className="w-full rounded-lg border border-border-strong px-5 py-2.5
+                   text-sm font-medium text-ink transition-colors
+                   hover:bg-sunken disabled:cursor-not-allowed
+                   disabled:text-subtle"
       >
         Take photo
       </button>

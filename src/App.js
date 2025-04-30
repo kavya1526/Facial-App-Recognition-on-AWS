@@ -5,14 +5,16 @@ import HistoryPage from './pages/HistoryPage';
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <main className="mx-auto max-w-lg px-4 py-10">
-        <h1 className="text-center text-2xl font-semibold tracking-tight text-gray-900">
-          Facial Recognition Check-In
-        </h1>
-        <p className="mt-1 mb-6 text-center text-sm text-gray-500">
-          Serverless employee verification on AWS Rekognition
-        </p>
+    <div className="min-h-screen">
+      <main className="mx-auto max-w-md px-4 py-12 sm:py-16">
+        <div className="mb-7 text-center">
+          <h1 className="text-[1.375rem] font-semibold tracking-tight text-ink">
+            Facial Recognition Check-In
+          </h1>
+          <p className="mt-1 text-sm text-subtle">
+            Serverless employee verification on AWS Rekognition
+          </p>
+        </div>
 
         <Header />
 
@@ -20,6 +22,10 @@ export default function App() {
           <Route path="/" element={<CheckInPage />} />
           <Route path="/history" element={<HistoryPage />} />
         </Routes>
+
+        <p className="mt-6 text-center text-xs text-subtle">
+          Demo system. Photos are deleted after 24 hours.
+        </p>
       </main>
     </div>
   );

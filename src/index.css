@@ -7,12 +7,153 @@
 @source "./";
 
 /* Tailwind v4 is configured in CSS rather than a tailwind.config.js. Design
-   tokens declared here become utilities automatically, so `bg-brand` and
-   `text-brand` work without touching a JS config file. */
+   tokens declared here become utilities automatically, so `bg-surface` and
+   `text-muted` work without touching a JS config file.
+
+   Everything below is expressed as a role (surface, border, muted) rather than
+   a value (gray-100, gray-300). That is what lets the dark theme at the bottom
+   of this file be a list of value swaps instead of a second set of components. */
 @theme {
-  --color-brand: #1f2937;
-  --color-success: #065f46;
-  --color-success-surface: #ecfdf5;
-  --color-danger: #991b1b;
-  --color-danger-surface: #fef2f2;
+  /* Neutrals carry a slight blue cast. A truly neutral gray next to white
+     reads as dirty rather than quiet, which is why almost no design system
+     ships one. */
+  --color-canvas: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-sunken: #f1f3f6;
+  --color-border: #e4e7ec;
+  --color-border-strong: #d3d8e0;
+
+  --color-ink: #0f1522;
+  --color-muted: #5b6472;
+  --color-subtle: #8b94a3;
+
+  /* Near-black primary. A saturated brand colour on the main action would
+     compete with the green/red verdict, which is the one thing on screen that
+     actually needs to carry meaning. */
+  --color-accent: #14192a;
+  --color-accent-hover: #262d42;
+  --color-on-accent: #ffffff;
+
+  /* Focus is the one place a real hue earns its keep -- it has to be visible
+     against both the light card and the dark camera viewport. */
+  --color-focus: #4f6bed;
+
+  --color-success: #05704a;
+  --color-success-surface: #e9f8f0;
+  --color-success-border: #b6e4cd;
+
+  --color-danger: #a4262c;
+  --color-danger-surface: #fdeeee;
+  --color-danger-border: #f3c9c9;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+
+  /* Two-part shadows: a tight contact shadow to seat the element plus a wide
+     ambient one. A single mid-size shadow is the usual tell of a UI that was
+     never looked at closely. */
+  --shadow-card: 0 1px 2px rgb(15 21 34 / 0.04),
+    0 8px 24px -12px rgb(15 21 34 / 0.12);
+  --shadow-lift: 0 1px 2px rgb(15 21 34 / 0.06),
+    0 16px 32px -16px rgb(15 21 34 / 0.22);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-canvas: #0b0e16;
+    --color-surface: #141926;
+    --color-sunken: #1c2232;
+    --color-border: #262d3d;
+    --color-border-strong: #333b4e;
+
+    --color-ink: #eef1f6;
+    --color-muted: #9aa3b4;
+    --color-subtle: #6f7889;
+
+    /* Inverted: on a dark surface the high-contrast action is the light one. */
+    --color-accent: #eef1f6;
+    --color-accent-hover: #ffffff;
+    --color-on-accent: #0f1522;
+
+    --color-focus: #7d93f5;
+
+    --color-success: #5fd3a3;
+    --color-success-surface: #0e2c22;
+    --color-success-border: #1d5040;
+
+    --color-danger: #f4919a;
+    --color-danger-surface: #2e1418;
+    --color-danger-border: #56262c;
+
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -12px rgb(0 0 0 / 0.6);
+    --shadow-lift: 0 1px 2px rgb(0 0 0 / 0.5), 0 16px 32px -16px rgb(0 0 0 / 0.7);
+  }
+}
+
+@layer base {
+  html {
+    /* Stops the layout shifting sideways when a short route (history, empty)
+       replaces a tall one and the scrollbar disappears. */
+    scrollbar-gutter: stable;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* One focus treatment for every interactive element, and only for keyboard
+     users. Tailwind's per-component focus utilities drift apart the moment
+     someone adds a control and forgets one. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* The verdict and the freshly-selected preview both appear in place of
+     something else, so they get a short rise rather than a bare swap. */
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .animate-rise-in {
+    animation: rise-in 220ms cubic-bezier(0.22, 0.8, 0.36, 1) both;
+  }
+
+  @keyframes shutter {
+    from {
+      opacity: 0.85;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  .animate-shutter {
+    animation: shutter 320ms ease-out both;
+  }
 }
