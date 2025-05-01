@@ -8,6 +8,10 @@ call.
 
 **Live:** https://kavya1526.github.io/Facial-Recognition-App-on-AWS
 
+![The check-in page after a successful match: the submitted photo, a granted
+verdict for the matched employee, and the similarity meter with the accept
+threshold marked](assets/check-in.png)
+
 ```
                     ┌──────────────── enrolment (async) ────────────────┐
                     │                                                    │
