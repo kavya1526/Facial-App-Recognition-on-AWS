@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/Facial-Recognition-App-on-AWS/static/css/main.2f429cc7.css",
-    "main.js": "/Facial-Recognition-App-on-AWS/static/js/main.4151c754.js",
+    "main.css": "/Facial-Recognition-App-on-AWS/static/css/main.32e2ffee.css",
+    "main.js": "/Facial-Recognition-App-on-AWS/static/js/main.6c889899.js",
     "index.html": "/Facial-Recognition-App-on-AWS/index.html",
-    "main.2f429cc7.css.map": "/Facial-Recognition-App-on-AWS/static/css/main.2f429cc7.css.map",
-    "main.4151c754.js.map": "/Facial-Recognition-App-on-AWS/static/js/main.4151c754.js.map"
+    "main.32e2ffee.css.map": "/Facial-Recognition-App-on-AWS/static/css/main.32e2ffee.css.map",
+    "main.6c889899.js.map": "/Facial-Recognition-App-on-AWS/static/js/main.6c889899.js.map"
   },
   "entrypoints": [
-    "static/css/main.2f429cc7.css",
-    "static/js/main.4151c754.js"
+    "static/css/main.32e2ffee.css",
+    "static/js/main.6c889899.js"
   ]
 }
