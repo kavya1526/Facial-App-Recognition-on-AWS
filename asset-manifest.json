@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/Facial-Recognition-App-on-AWS/static/css/main.07305c9f.css",
+    "main.js": "/Facial-Recognition-App-on-AWS/static/js/main.b7fc7970.js",
+    "index.html": "/Facial-Recognition-App-on-AWS/index.html",
+    "main.07305c9f.css.map": "/Facial-Recognition-App-on-AWS/static/css/main.07305c9f.css.map",
+    "main.b7fc7970.js.map": "/Facial-Recognition-App-on-AWS/static/js/main.b7fc7970.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.07305c9f.css",
+    "static/js/main.b7fc7970.js"
+  ]
+}
